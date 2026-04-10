@@ -90,11 +90,14 @@
         { src: iconDataURI, sizes: "any", type: "image/svg+xml" }
       ]
     };
-    const manifestBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
-    const manifestURL = URL.createObjectURL(manifestBlob);
     const manifestLink = document.createElement('link');
     manifestLink.rel = 'manifest';
-    manifestLink.href = manifestURL;
+    if (location.protocol === 'https:') {
+      manifestLink.href = 'manifest.json';
+    } else {
+      const manifestBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+      manifestLink.href = URL.createObjectURL(manifestBlob);
+    }
     document.head.appendChild(manifestLink);
   });
 
