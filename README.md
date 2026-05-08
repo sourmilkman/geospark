@@ -2,11 +2,11 @@
 
 **Geography trivia that learns you.**
 
-An installable PWA geography quiz game with adaptive difficulty, multiple game stages, and a self-improving learning system.
+A single-file, installable PWA geography quiz game with adaptive difficulty, multiple game stages, and a self-improving learning system.
 
 ## Features
 
-- **7 Game Stages** that unlock as you level up:
+- **6 Game Stages** that unlock as you level up:
   - 🏳️ **Flags** (Level 1) — Identify countries by flag and vice versa
   - 🏛️ **Capitals** (Level 5) — Match countries to capitals
   - 🌍 **Continents** (Level 10) — Place countries on the right continent
@@ -17,7 +17,7 @@ An installable PWA geography quiz game with adaptive difficulty, multiple game s
 
 - **Adaptive Difficulty** — The game tracks which countries you struggle with and serves them more often. Mastered countries fade to the background. Timer shrinks as you level up. Higher levels use same-continent distractors.
 
-- **87 Countries** across 6 difficulty tiers with inline SVG flags (PC) or native emoji flags (mobile)
+- **86 Countries** across 6 difficulty tiers with inline SVG flags (PC) or native emoji flags (mobile)
 
 - **Sound Effects** — Web Audio API synthesized sounds for taps, correct/wrong answers, timeouts, level-ups, and game over
 
@@ -25,7 +25,7 @@ An installable PWA geography quiz game with adaptive difficulty, multiple game s
 
 - **Debug Tools** — Admin panel with passcode-protected level jumping for testing
 
-- **PWA** — Installable as a standalone app with offline support via service worker
+- **PWA** — Installable as a standalone app with offline support via inline service worker
 
 ## How to Play
 
@@ -49,9 +49,9 @@ Access via Learn page → Debug Tools:
 
 ## Tech
 
-- Single HTML game shell, zero dependencies
+- Single HTML file, zero dependencies
 - Inline SVG flags for cross-platform rendering
 - Web Audio API for sound synthesis
 - `requestAnimationFrame` timer for smooth performance
 - `localStorage` for player profile persistence
-- PWA manifest and same-origin service worker
+- Inline PWA manifest and service worker via Blob URLs
