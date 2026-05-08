@@ -1,8 +1,8 @@
 {
   "name": "GeoSpark",
   "short_name": "GeoSpark",
-  "start_url": "/geospark/",
-  "scope": "/geospark/",
+  "start_url": "/geospark2/",
+  "scope": "/geospark2/",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#1a1a2e",

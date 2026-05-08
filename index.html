@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>
 // ═══════════════════════════════════════
-// PWA: Inline manifest + service worker
+// PWA: Inline manifest + same-origin service worker
 // ═══════════════════════════════════════
 (function initPWA(){
   // Generate a 512x512 SVG icon as data URI
@@ -101,65 +101,10 @@
     document.head.appendChild(manifestLink);
   });
 
-  // Service worker (inline via blob)
-  const swCode = `
-    const CACHE_NAME = 'geospark-v1';
-    const SELF_URL = self.location.href;
-
-    self.addEventListener('install', e => {
-      e.waitUntil(
-        caches.open(CACHE_NAME).then(cache => {
-          // Cache the page that registered us
-          return cache.addAll([self.registration.scope]);
-        }).catch(() => {})
-      );
-      self.skipWaiting();
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js', {scope: './'}).catch(() => {
+      // SW registration may fail on some hosts - app still works fine
     });
-
-    self.addEventListener('activate', e => {
-      e.waitUntil(
-        caches.keys().then(keys =>
-          Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-        )
-      );
-      self.clients.claim();
-    });
-
-    self.addEventListener('fetch', e => {
-      // Only handle same-origin navigations and the Google Fonts
-      const url = new URL(e.request.url);
-      if (e.request.method !== 'GET') return;
-
-      e.respondWith(
-        caches.match(e.request).then(cached => {
-          const fetchPromise = fetch(e.request).then(response => {
-            if (response && response.status === 200) {
-              const clone = response.clone();
-              caches.open(CACHE_NAME).then(cache => {
-                try { cache.put(e.request, clone); } catch(err) {}
-              });
-            }
-            return response;
-          }).catch(() => cached);
-
-          return cached || fetchPromise;
-        })
-      );
-    });
-  `;
-
-  if ('serviceWorker' in navigator) {
-    const swBlob = new Blob([swCode], {type: 'application/javascript'});
-    const swURL = URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swURL, {scope: location.pathname})
-      .then(reg => {
-        // Revoke after a brief delay to allow registration
-        setTimeout(() => URL.revokeObjectURL(swURL), 5000);
-      })
-      .catch(() => {
-        // SW registration may fail on some hosts — app still works fine
-        URL.revokeObjectURL(swURL);
-      });
   }
 })();
 </script>
@@ -183,6 +128,9 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 .hdr-stats{display:flex;gap:12px;align-items:center;}
 .st{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);font-weight:500;}
 .st .v{color:var(--text);font-family:'DM Mono',monospace;font-size:13px;}
+.pause-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-family:'DM Mono',monospace;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.pause-btn:active{transform:scale(.95);}
+.pause-btn:disabled{opacity:.4;pointer-events:none;}
 
 /* LEVEL BAR */
 .lvl-wrap{padding:0 16px 8px;flex-shrink:0;z-index:2;position:relative;}
@@ -329,6 +277,11 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 /* SPLASH LEARN BTN */
 .sp-learn-btn{margin-top:12px;background:none;border:1px solid var(--border);border-radius:12px;padding:12px;width:100%;max-width:260px;color:var(--text-dim);font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;cursor:pointer;touch-action:manipulation;transition:all .15s;}
 .sp-learn-btn:active{transform:scale(.97);}
+.pause-overlay{position:absolute;inset:0;z-index:14;display:flex;align-items:center;justify-content:center;padding:24px;background:#08080e55;backdrop-filter:blur(2px);}
+.pause-panel{width:100%;max-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;text-align:center;box-shadow:0 18px 50px #0008;}
+.pause-title{font-size:24px;font-weight:800;margin-bottom:6px;}
+.pause-sub{font-size:13px;color:var(--text-dim);margin-bottom:18px;}
+.app.game-paused .header,.app.game-paused .lvl-wrap,.app.game-paused .stage-row,.app.game-paused .game-area,.app.game-paused .bot-bar{filter:blur(5px);pointer-events:none;user-select:none;}
 
 .hidden{display:none!important;}
 </style>
@@ -391,6 +344,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <!-- HEADER -->
 <div class="header">
 <div class="logo">GeoSpark</div>
+<button class="pause-btn hidden" id="pause-btn" aria-label="Pause game">II</button>
 <div class="hdr-stats">
 <div class="st"><span>🔥</span><span class="v" id="streak">0</span></div>
 <div class="st"><span>⭐</span><span class="v" id="score">0</span></div>
@@ -430,6 +384,14 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 <div class="bot-bar" id="bot-bar">
 <button class="bot-btn active" data-dir="fwd">Forward</button>
 <button class="bot-btn" data-dir="rev">Reverse</button>
+</div>
+
+<div class="pause-overlay hidden" id="pause-overlay">
+<div class="pause-panel">
+<div class="pause-title">Paused</div>
+<div class="pause-sub">Take a breather. The timer is frozen.</div>
+<button class="big-btn" id="resume-btn">Resume</button>
+</div>
 </div>
 </div>
 
@@ -699,9 +661,11 @@ let S = {
   dir:'fwd', score:0, streak:0, bestStreak:0,
   level:1, lvlProg:0, lvlTarget:5, lives:3,
   timerMax:15, timerLeft:15, timerInt:null, timerRAF:0,
+  timerEndAt:0, timerPausedMs:0, timerLastSec:-1,
   currentQ:null, answered:false,
   totalCorrect:0, totalAnswered:0,
   recentAnswers:[], activeStages:['flag'],
+  paused:false, inGame:false,
 };
 
 let profile = loadProfile();
@@ -1305,8 +1269,9 @@ function renderMap(q){
 // ANSWER HANDLING
 // ═══════════════════════════════════════
 function handleAnswer(btn,val){
-  if(S.answered)return;
+  if(S.answered||S.paused)return;
   S.answered=true;
+  setPauseVisible(false);
   stopTimer();
 
   const q=S.currentQ;
@@ -1347,8 +1312,9 @@ function handleAnswer(btn,val){
 }
 
 function handleMapAnswer(path,name){
-  if(S.answered)return;
+  if(S.answered||S.paused)return;
   S.answered=true;
+  setPauseVisible(false);
   stopTimer();
 
   const q=S.currentQ;
@@ -1389,8 +1355,9 @@ function handleMapAnswer(path,name){
 }
 
 function handleTimeout(){
-  if(S.answered)return;
+  if(S.answered||S.paused)return;
   S.answered=true;
+  setPauseVisible(false);
   AudioEngine.timeout();
   const q=S.currentQ;
   const fb=document.getElementById('feedback');
@@ -1451,6 +1418,8 @@ function cacheDom(){
   DOM.lvlNum=document.getElementById('lvl-num');
   DOM.lvlProg=document.getElementById('lvl-prog');
   DOM.lvlFill=document.getElementById('lvl-fill');
+  DOM.pauseBtn=document.getElementById('pause-btn');
+  DOM.pauseOverlay=document.getElementById('pause-overlay');
 }
 
 function updateHUD(){
@@ -1465,42 +1434,77 @@ function updateHUD(){
 // ═══════════════════════════════════════
 // TIMER
 // ═══════════════════════════════════════
-function startTimer(){
-  S.timerMax=getTimer();S.timerLeft=S.timerMax;
+function setPauseVisible(visible){
+  DOM.pauseBtn.classList.toggle('hidden',!visible);
+  DOM.pauseBtn.disabled=!visible||S.answered||S.paused;
+}
+
+function setPausedUI(paused){
+  S.paused=paused;
+  document.querySelector('.app').classList.toggle('game-paused',paused);
+  DOM.pauseOverlay.classList.toggle('hidden',!paused);
+  DOM.pauseBtn.disabled=paused||S.answered||!S.inGame;
+}
+
+function updateTimerDisplay(rem){
   const ring=document.getElementById('timer-ring');
   const fill=document.getElementById('timer-fl');
   const text=document.getElementById('timer-txt');
   const circ=2*Math.PI*22;
+  const sec=Math.ceil(rem);
+  if(sec!==S.timerLastSec){
+    S.timerLastSec=sec;S.timerLeft=sec;text.textContent=sec;
+    if(rem<=4&&!ring.classList.contains('timer-danger')){
+      ring.classList.add('timer-danger');
+      fill.style.stroke='var(--wrong)';
+    }
+  }
+  fill.style.strokeDashoffset=((1-rem/S.timerMax)*circ).toFixed(1);
+}
+
+function timerTick(now){
+  if(S.paused||!S.inGame)return;
+  const rem=Math.max(0,(S.timerEndAt-now)/1000);
+  updateTimerDisplay(rem);
+  if(rem<=0){handleTimeout();return;}
+  S.timerRAF=requestAnimationFrame(timerTick);
+}
+
+function startTimer(){
+  S.timerMax=getTimer();S.timerLeft=S.timerMax;S.timerLastSec=-1;
+  S.timerEndAt=performance.now()+S.timerMax*1000;
+  const ring=document.getElementById('timer-ring');
+  const fill=document.getElementById('timer-fl');
+  const text=document.getElementById('timer-txt');
   ring.classList.remove('timer-danger');
   text.textContent=S.timerLeft;fill.style.strokeDashoffset='0';
   fill.style.stroke='';
   cancelAnimationFrame(S.timerRAF);
-  const t0=performance.now();
-  let lastSec=-1;
-  function tick(now){
-    const el=(now-t0)/1000;
-    const rem=Math.max(0,S.timerMax-el);
-    const sec=Math.ceil(rem);
-    if(sec!==lastSec){
-      lastSec=sec;S.timerLeft=sec;text.textContent=sec;
-      if(rem<=4&&!ring.classList.contains('timer-danger')){
-        ring.classList.add('timer-danger');
-        fill.style.stroke='var(--wrong)';
-      }
-    }
-    fill.style.strokeDashoffset=((1-rem/S.timerMax)*circ).toFixed(1);
-    if(rem<=0){handleTimeout();return;}
-    S.timerRAF=requestAnimationFrame(tick);
-  }
-  S.timerRAF=requestAnimationFrame(tick);
+  S.timerRAF=requestAnimationFrame(timerTick);
 }
 function stopTimer(){cancelAnimationFrame(S.timerRAF);}
+
+function pauseGame(){
+  if(!S.inGame||S.answered||S.paused)return;
+  S.timerPausedMs=Math.max(0,S.timerEndAt-performance.now());
+  cancelAnimationFrame(S.timerRAF);
+  setPausedUI(true);
+}
+
+function resumeGame(){
+  if(!S.paused)return;
+  S.timerEndAt=performance.now()+S.timerPausedMs;
+  setPausedUI(false);
+  S.timerRAF=requestAnimationFrame(timerTick);
+}
 
 // ═══════════════════════════════════════
 // GAME FLOW
 // ═══════════════════════════════════════
 function nextQ(){
   S.answered=false;
+  setPausedUI(false);
+  setPauseVisible(true);
   const stage=pickStage();
   let q;
   switch(stage.id){
@@ -1524,15 +1528,16 @@ function startGame(overrideLevel){
   document.getElementById('splash').classList.add('hidden');
   document.getElementById('gameover').classList.add('hidden');
   document.getElementById('learn-screen').classList.add('hidden');
+  document.getElementById('mapex-screen').classList.add('hidden');
   S.score=0;S.streak=0;S.bestStreak=0;
   S.level=overrideLevel||1;S.lvlProg=0;S.lvlTarget=Math.min(10,5+S.level);S.lives=3;
   S.totalCorrect=0;S.totalAnswered=0;S.recentAnswers=[];
-  S.activeStages=['flag'];
+  S.activeStages=['flag'];S.inGame=true;S.paused=false;
   updateHUD();nextQ();
 }
 
 function endGame(){
-  stopTimer();AudioEngine.gameOver();
+  stopTimer();S.inGame=false;setPausedUI(false);setPauseVisible(false);AudioEngine.gameOver();
   const isNew=S.score>profile.bestScore;
   if(isNew)profile.bestScore=S.score;
   profile.gamesPlayed++;
@@ -1557,6 +1562,7 @@ function endGame(){
 // DIRECTION TOGGLE
 // ═══════════════════════════════════════
 document.getElementById('bot-bar').addEventListener('click',e=>{
+  if(S.paused)return;
   const btn=e.target.closest('.bot-btn');
   if(!btn)return;
   AudioEngine.tap();
@@ -1569,6 +1575,8 @@ document.getElementById('bot-bar').addEventListener('click',e=>{
 // ═══════════════════════════════════════
 document.getElementById('start-btn').addEventListener('click',()=>{AudioEngine.unlock();AudioEngine.tap();startGame();});
 document.getElementById('restart-btn').addEventListener('click',()=>{AudioEngine.tap();startGame();});
+document.getElementById('pause-btn').addEventListener('click',()=>{AudioEngine.tap();pauseGame();});
+document.getElementById('resume-btn').addEventListener('click',()=>{AudioEngine.tap();resumeGame();});
 
 // Unlock audio on any first touch
 document.addEventListener('touchstart',()=>{AudioEngine.unlock();},{once:true});
@@ -1852,7 +1860,6 @@ document.getElementById('learn-back').addEventListener('click', () => {
 document.getElementById('mapex-back').addEventListener('click', () => {
   AudioEngine.tap();
   document.getElementById('mapex-screen').classList.add('hidden');
-  document.getElementById('learn-screen').classList.add('hidden');
 });
 
 (function initSplash(){
